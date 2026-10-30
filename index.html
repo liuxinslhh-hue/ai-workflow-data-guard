@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="AI Workflow Data Guard：在浏览器本地检查并脱敏工作流文本，不上传任何内容。">
+  <meta name="color-scheme" content="dark">
+  <title>AI Workflow Data Guard</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #07100d;
+      --panel: rgba(17, 31, 26, .84);
+      --line: rgba(174, 255, 214, .16);
+      --text: #edf8f3;
+      --muted: #9ab5a8;
+      --green: #79f2b0;
+      --green-2: #2bd981;
+      --amber: #ffc857;
+      --red: #ff7b7b;
+      --shadow: 0 24px 80px rgba(0, 0, 0, .36);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 8% 8%, rgba(43, 217, 129, .15), transparent 28rem),
+        radial-gradient(circle at 92% 0%, rgba(121, 242, 176, .08), transparent 24rem),
+        var(--bg);
+      font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    button, textarea { font: inherit; }
+    button { cursor: pointer; }
+    .shell { width: min(1180px, calc(100% - 32px)); margin: 0 auto; padding: 24px 0 56px; }
+    nav { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 64px; }
+    .brand { display: inline-flex; align-items: center; gap: 11px; font-weight: 760; letter-spacing: -.02em; }
+    .mark { display: grid; place-items: center; width: 36px; height: 36px; border: 1px solid var(--line); border-radius: 11px; background: rgba(121, 242, 176, .08); color: var(--green); }
+    .privacy-pill { display: inline-flex; align-items: center; gap: 8px; padding: 9px 13px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 13px; background: rgba(255,255,255,.025); }
+    .privacy-pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--green-2); box-shadow: 0 0 14px var(--green-2); }
+    .hero { max-width: 850px; margin-bottom: 42px; }
+    .eyebrow { margin: 0 0 16px; color: var(--green); font-size: 13px; font-weight: 750; letter-spacing: .16em; text-transform: uppercase; }
+    h1 { margin: 0; font-size: clamp(44px, 7vw, 82px); line-height: .98; letter-spacing: -.065em; }
+    .hero p { max-width: 660px; margin: 24px 0 0; color: var(--muted); font-size: clamp(17px, 2vw, 20px); line-height: 1.7; }
+    .workspace { display: grid; grid-template-columns: 1fr 1fr; overflow: hidden; border: 1px solid var(--line); border-radius: 24px; background: var(--panel); box-shadow: var(--shadow); backdrop-filter: blur(20px); }
+    .pane { min-width: 0; padding: 22px; }
+    .pane + .pane { border-left: 1px solid var(--line); }
+    .pane-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+    h2 { margin: 0; font-size: 15px; letter-spacing: -.01em; }
+    .hint { color: var(--muted); font-size: 12px; }
+    textarea {
+      display: block;
+      width: 100%;
+      height: 360px;
+      resize: vertical;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      outline: none;
+      color: #dff4e9;
+      background: rgba(0, 0, 0, .25);
+      font: 13px/1.65 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    textarea:focus { border-color: rgba(121, 242, 176, .48); box-shadow: 0 0 0 4px rgba(121, 242, 176, .07); }
+    textarea[readonly] { color: #a9c9ba; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+    .primary, .secondary {
+      min-height: 42px;
+      padding: 0 17px;
+      border-radius: 11px;
+      font-weight: 720;
+      transition: transform .15s, background .15s, opacity .15s;
+    }
+    .primary { border: 0; color: #04120b; background: var(--green); }
+    .secondary { border: 1px solid var(--line); color: var(--text); background: rgba(255,255,255,.035); }
+    .primary:hover, .secondary:hover { transform: translateY(-1px); }
+    button:disabled { cursor: not-allowed; opacity: .42; transform: none; }
+    .status { display: flex; align-items: center; gap: 9px; min-height: 22px; margin-top: 14px; color: var(--muted); font-size: 13px; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+    .status.safe { color: var(--green); }
+    .status.safe .status-dot { background: var(--green-2); }
+    .status.warn { color: var(--amber); }
+    .status.warn .status-dot { background: var(--amber); }
+    .findings { grid-column: 1 / -1; padding: 0 22px 22px; }
+    .finding-list { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 0; padding: 0; list-style: none; }
+    .finding { min-height: 76px; padding: 14px; border: 1px solid var(--line); border-radius: 13px; background: rgba(255,255,255,.025); }
+    .finding strong { display: block; font-size: 22px; color: var(--amber); }
+    .finding span { color: var(--muted); font-size: 12px; }
+    .empty { padding: 16px; border: 1px dashed var(--line); border-radius: 13px; color: var(--muted); text-align: center; font-size: 13px; }
+    .how { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 20px; }
+    .how article { padding: 20px; border: 1px solid var(--line); border-radius: 16px; background: rgba(255,255,255,.02); }
+    .step { display: inline-grid; place-items: center; width: 30px; height: 30px; margin-bottom: 24px; border-radius: 9px; color: #07100d; background: var(--green); font-weight: 800; font-size: 13px; }
+    .how h3 { margin: 0 0 7px; font-size: 15px; }
+    .how p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
+    footer { display: flex; justify-content: space-between; gap: 16px; margin-top: 34px; color: #6f8b7e; font-size: 12px; }
+    @media (max-width: 760px) {
+      nav { margin-bottom: 42px; }
+      .brand span:last-child { display: none; }
+      .workspace { grid-template-columns: 1fr; }
+      .pane + .pane { border-left: 0; border-top: 1px solid var(--line); }
+      .finding-list, .how { grid-template-columns: 1fr; }
+      textarea { height: 300px; }
+      footer { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <nav aria-label="主导航">
+      <div class="brand"><span class="mark" aria-hidden="true">◆</span><span>AI Workflow Data Guard</span></div>
+      <span class="privacy-pill">只在本地浏览器处理</span>
+    </nav>
+
+    <section class="hero">
+      <p class="eyebrow">Privacy before prompt</p>
+      <h1>先脱敏，<br>再交给 AI。</h1>
+      <p>粘贴工作流、配置或日志，一键识别常见密钥与个人信息，生成可安全分享的副本。所有检测都在你的浏览器中完成。</p>
+    </section>
+
+    <section class="workspace" aria-label="数据脱敏工作区">
+      <div class="pane">
+        <div class="pane-head"><h2>原始内容</h2><span class="hint" id="char-count">0 字符</span></div>
+        <textarea id="source" spellcheck="false" placeholder="在这里粘贴 JSON、YAML、日志或工作流文本…" aria-label="原始内容"></textarea>
+        <div class="actions">
+          <button class="primary" id="scan" type="button">扫描并脱敏</button>
+          <button class="secondary" id="example" type="button">载入安全示例</button>
+          <button class="secondary" id="clear" type="button">清空</button>
+        </div>
+        <div class="status" id="source-status" role="status"><span class="status-dot"></span><span>等待输入</span></div>
+      </div>
+
+      <div class="pane">
+        <div class="pane-head"><h2>安全副本</h2><span class="hint">自动替换为 [REDACTED]</span></div>
+        <textarea id="output" readonly aria-label="脱敏后的安全副本" placeholder="脱敏结果会显示在这里…"></textarea>
+        <div class="actions">
+          <button class="primary" id="copy" type="button" disabled>复制安全副本</button>
+          <button class="secondary" id="download" type="button" disabled>下载 .txt</button>
+        </div>
+        <div class="status" id="output-status" role="status"><span class="status-dot"></span><span>尚未生成</span></div>
+      </div>
+
+      <div class="findings" id="findings" aria-live="polite"><div class="empty">扫描结果会按风险类型汇总显示</div></div>
+    </section>
+
+    <section class="how" aria-label="使用方法">
+      <article><span class="step">1</span><h3>粘贴</h3><p>加入准备交给 AI 的工作流、配置或错误日志。</p></article>
+      <article><span class="step">2</span><h3>扫描</h3><p>本地识别密钥、令牌、邮箱、IP 地址与敏感字段。</p></article>
+      <article><span class="step">3</span><h3>安全分享</h3><p>复制或下载脱敏副本，再提交给你的 AI 工具。</p></article>
+    </section>
+
+    <footer><span>零上传 · 零账户 · 零追踪</span><span>请在分享前人工复核脱敏结果</span></footer>
+  </main>
+
+  <script type="module">
+    const source = document.querySelector('#source');
+    const output = document.querySelector('#output');
+    const scanButton = document.querySelector('#scan');
+    const exampleButton = document.querySelector('#example');
+    const clearButton = document.querySelector('#clear');
+    const copyButton = document.querySelector('#copy');
+    const downloadButton = document.querySelector('#download');
+    const charCount = document.querySelector('#char-count');
+    const sourceStatus = document.querySelector('#source-status');
+    const outputStatus = document.querySelector('#output-status');
+    const findings = document.querySelector('#findings');
+
+    const patterns = [
+      { name: 'API 密钥', pattern: /\b(?:sk|pk|api)[-_][A-Za-z0-9_-]{16,}\b/gi },
+      { name: '访问令牌', pattern: /\b(?:ghp|github_pat|xox[baprs])_[A-Za-z0-9_-]{12,}\b/gi },
+      { name: 'Bearer 令牌', pattern: /\bBearer\s+[A-Za-z0-9._~+/=-]{12,}/gi },
+      { name: '敏感字段', pattern: /((?:api[_-]?key|secret|password|passwd|token|access[_-]?key)\s*[=:]\s*["']?)([^\s,"'\]}]{4,})/gi, preservePrefix: true },
+      { name: '邮箱地址', pattern: /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi },
+      { name: 'IPv4 地址', pattern: /\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b/g }
+    ];
+
+    const setStatus = (element, tone, message) => {
+      element.className = `status ${tone}`;
+      element.querySelector('span:last-child').textContent = message;
+    };
+
+    const redactPattern = (text, definition) => {
+      let count = 0;
+      const redacted = text.replace(definition.pattern, (...matches) => {
+        count += 1;
+        return definition.preservePrefix ? `${matches[1]}[REDACTED]` : '[REDACTED]';
+      });
+      return { text: redacted, finding: { name: definition.name, count } };
+    };
+
+    const scanText = (text) => patterns.reduce(
+      (state, definition) => {
+        const result = redactPattern(state.text, definition);
+        return {
+          text: result.text,
+          findings: result.finding.count > 0 ? [...state.findings, result.finding] : state.findings
+        };
+      },
+      { text, findings: [] }
+    );
+
+    const renderFindings = (items) => {
+      if (items.length === 0) {
+        findings.innerHTML = '<div class="empty">未发现规则库覆盖的敏感信息；分享前仍请人工复核</div>';
+        return;
+      }
+      const cards = items.map((item) => `<li class="finding"><strong>${item.count}</strong><span>${item.name}</span></li>`).join('');
+      findings.innerHTML = `<ul class="finding-list">${cards}</ul>`;
+    };
+
+    const runScan = () => {
+      const value = source.value;
+      if (value.trim().length === 0) {
+        throw new Error('请先粘贴需要检查的内容。');
+      }
+      const result = scanText(value);
+      output.value = result.text;
+      renderFindings(result.findings);
+      copyButton.disabled = false;
+      downloadButton.disabled = false;
+      const total = result.findings.reduce((sum, item) => sum + item.count, 0);
+      setStatus(sourceStatus, total > 0 ? 'warn' : 'safe', total > 0 ? `发现 ${total} 处潜在风险` : '未发现已知风险');
+      setStatus(outputStatus, 'safe', '安全副本已生成');
+    };
+
+    const clearAll = () => {
+      source.value = '';
+      output.value = '';
+      charCount.textContent = '0 字符';
+      copyButton.disabled = true;
+      downloadButton.disabled = true;
+      findings.innerHTML = '<div class="empty">扫描结果会按风险类型汇总显示</div>';
+      setStatus(sourceStatus, '', '等待输入');
+      setStatus(outputStatus, '', '尚未生成');
+    };
+
+    source.addEventListener('input', () => {
+      charCount.textContent = `${source.value.length} 字符`;
+      if (output.value.length > 0) {
+        output.value = '';
+        copyButton.disabled = true;
+        downloadButton.disabled = true;
+        setStatus(outputStatus, '', '内容已变化，请重新扫描');
+      }
+    });
+
+    scanButton.addEventListener('click', () => {
+      try {
+        runScan();
+      } catch (error) {
+        setStatus(sourceStatus, 'warn', error instanceof Error ? error.message : '扫描失败');
+      }
+    });
+
+    exampleButton.addEventListener('click', () => {
+      source.value = 'workflow: publish-report\napi_key=demo-secret-value\nowner: demo@example.com\nendpoint: 192.168.10.25';
+      source.dispatchEvent(new Event('input'));
+      runScan();
+    });
+
+    clearButton.addEventListener('click', clearAll);
+
+    copyButton.addEventListener('click', async () => {
+      await navigator.clipboard.writeText(output.value);
+      setStatus(outputStatus, 'safe', '已复制到剪贴板');
+    });
+
+    downloadButton.addEventListener('click', () => {
+      const blob = new Blob([output.value], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = 'data-guard-safe-copy.txt';
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setStatus(outputStatus, 'safe', '安全副本已下载');
+    });
+  </script>
+</body>
+</html>
